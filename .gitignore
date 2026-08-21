@@ -2,4 +2,5 @@ node_modules/
 data/*.db
 data/*.db-*
 .env
-npm-debug.log*
+npm-debug.log**.log
+*.pid
