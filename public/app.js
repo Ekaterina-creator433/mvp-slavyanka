@@ -585,7 +585,12 @@ views.tasks = async () => {
            const ref = state._taskRefs[t.related_type]?.find((x) => x.id === t.related_id);
            let link = `${esc(t.related_type || "—")} ${t.related_id ? "#" + t.related_id : ""}`;
            if (ref) {
-             const label = t.related_type === "product" ? ref.name : t.related_type === "deal" ? ref.number : ref.number;
+             const label =
+               t.related_type === "product"
+                 ? ref.name
+                 : t.related_type === "deal"
+                   ? ref.number
+                   : `${ref.number} · ${ref.name}`;
              if (t.related_type === "product") link = `<a href="javascript:void(0)" onclick="openProduct(${t.related_id})">${esc(label)}</a>`;
              else if (t.related_type === "deal") link = `<a href="javascript:void(0)" onclick="openDeal(${t.related_id})">${esc(label)}</a>`;
              else link = esc(label);
@@ -615,7 +620,12 @@ window.taskTypeChanged = () => {
     `<option value="">— выберите —</option>` +
     items
       .map((x) => {
-        const label = type === "product" ? `${x.code} · ${x.name}` : x.number || x.id;
+        const label =
+          type === "product"
+            ? `${x.code} · ${x.name}`
+            : type === "certificate"
+              ? `${x.number} · ${x.name}`
+              : x.number || x.id;
         return `<option value="${x.id}">${esc(String(label))}</option>`;
       })
       .join("");
