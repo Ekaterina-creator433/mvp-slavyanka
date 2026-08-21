@@ -103,16 +103,46 @@ views.dashboard = async () => {
 };
 
 views.products = async () => {
-  const products = await api("/api/products");
+  const [products, materials, mp] = await Promise.all([
+    api("/api/products"),
+    api("/api/materials"),
+    api("/api/minpromtorg"),
+  ]);
+  state._products = products;
+  const matOpts = materials.map((m) => `<option value="${esc(m.name)}">`).join("");
+  const mpByProduct = {};
+  mp.forEach((m) => {
+    (mpByProduct[m.product_id] = mpByProduct[m.product_id] || []).push(m);
+  });
+  const mpCell = (pid) => {
+    const recs = mpByProduct[pid] || [];
+    if (!recs.length) return `<span class="tag tag--new">нет записи</span>`;
+    const active = recs.find((r) => r.status === "active");
+    const pending = recs.find((r) => r.status === "pending");
+    if (active) return `<span class="tag tag--valid">в реестре (${recs.length})</span>`;
+    if (pending) return `<span class="tag tag--pending">на рассмотрении</span>`;
+    return `<span class="tag tag--expired">исключена</span>`;
+  };
   return `
     <div class="card">
       <div class="section-title"><span>Добавить изделие</span></div>
       <div class="form-grid">
+        <div class="field"><label>Тип изделия (автозаполнение)</label><select id="pPreset" onchange="presetChanged()">
+          <option value="">— выберите тип —</option>
+          <option value="fire">Защита от тепла и огня (сварщик)</option>
+          <option value="antistat">Антистатика</option>
+          <option value="oil">Защита от нефти и нефтепродуктов</option>
+          <option value="tick">Защита от клещей (энцефалитный)</option>
+          <option value="signal">Сигнальная защита (видимость)</option>
+        </select></div>
         <div class="field"><label>Название</label><input id="pName" required></div>
         <div class="field"><label>Артикул (код)</label><input id="pCode"></div>
         <div class="field"><label>Класс защиты</label><input id="pClass"></div>
-        <div class="field"><label>Климатический пояс</label><input id="pZone"></div>
-        <div class="field"><label>Материал</label><input id="pMaterial"></div>
+        <div class="field"><label>Климатический пояс</label><select id="pZone">
+          <option value="">—</option>
+          <option>I–II</option><option>I–III</option><option>I–IV</option><option>I–V</option><option>IV особый</option>
+        </select></div>
+        <div class="field"><label>Материал</label><input id="pMaterial" list="matList"><datalist id="matList">${matOpts}</datalist></div>
         <div class="field"><label>ТН ВЭД</label><input id="pTnved"></div>
         <div class="field"><label>ОКПД2</label><input id="pOkpd2"></div>
         <div class="field"><label>ТУ</label><input id="pTu"></div>
@@ -123,13 +153,13 @@ views.products = async () => {
 
     ${card(
       `Номенклатура (${products.length})`,
-      `<table><tr><th>Артикул</th><th>Название</th><th>Класс защиты</th><th>Пояс</th><th>Материал</th><th>ТН ВЭД</th><th>ОКПД2</th><th>Серт.</th><th></th></tr>
+      `<table><tr><th>Артикул</th><th>Название</th><th>Класс защиты</th><th>Пояс</th><th>Материал</th><th>ТН ВЭД</th><th>ОКПД2</th><th>Серт.</th><th>Реестр МПТ</th><th></th></tr>
        ${products
          .map(
            (p) => `<tr>
              <td><b>${esc(p.code)}</b></td><td>${esc(p.name)}</td><td>${esc(p.protection_class)}</td>
              <td>${esc(p.climate_zone)}</td><td>${esc(p.material)}</td><td>${esc(p.tn_ved)}</td>
-             <td>${esc(p.okpd2)}</td><td>${p.cert_count}</td>
+             <td>${esc(p.okpd2)}</td><td>${p.cert_count}</td><td>${mpCell(p.id)}</td>
              <td><button class="btn btn--ghost btn--sm" onclick="openProduct(${p.id})">карточка</button></td>
            </tr>`
          )
@@ -137,6 +167,26 @@ views.products = async () => {
        </table>`
     )}
   `;
+};
+
+const PRODUCT_PRESETS = {
+  fire: { code: "SV", cls: "Класс 1 (защита от тепла и огня)", tnved: "6203.22.8000", okpd2: "14.12.30.150", material: "Термостойкая ткань Т-2" },
+  antistat: { code: "EL", cls: "Антистатика (защита от стат. электричества)", tnved: "6203.43.9000", okpd2: "14.12.30.160", material: "Смесовая ткань с антистатической нитью" },
+  oil: { code: "NP", cls: "Защита от нефти и нефтепродуктов", tnved: "6210.40.0000", okpd2: "14.12.30.170", material: "ПВХ-ткань маслостойкая" },
+  tick: { code: "TG", cls: "Защита от клещей и механических повреждений", tnved: "6203.49.9000", okpd2: "14.12.30.140", material: "Хлопковая ткань «Грета»" },
+  signal: { code: "UN", cls: "Сигнальная защита, видимость", tnved: "6203.42.9000", okpd2: "14.12.30.190", material: "Смесовая ткань с флюоресцентными полосами" },
+};
+
+window.presetChanged = () => {
+  const pr = PRODUCT_PRESETS[$("#pPreset").value];
+  if (!pr) return;
+  $("#pClass").value = pr.cls;
+  $("#pTnved").value = pr.tnved;
+  $("#pOkpd2").value = pr.okpd2;
+  $("#pMaterial").value = pr.material;
+  const n = (state._products?.length || 0) + 1;
+  $("#pCode").value = `${pr.code}-0${n}`;
+  $("#pTu").value = `ТУ 8572-0${String(n).padStart(2, "0")}-22345678-2026`;
 };
 
 window.openProduct = async (id) => {
@@ -629,7 +679,19 @@ window.taskTypeChanged = () => {
         return `<option value="${x.id}">${esc(String(label))}</option>`;
       })
       .join("");
+  sel.onchange = () => {
+    const opt = sel.options[sel.selectedIndex];
+    if (!opt.value) return;
+    if (!$("#tTitle").value.trim()) $("#tTitle").value = `По ${TYPE_WORDS[type]}: ${opt.textContent}`;
+    if (!$("#tDue").value) {
+      const d = new Date();
+      d.setDate(d.getDate() + 7);
+      $("#tDue").value = d.toISOString().slice(0, 10);
+    }
+  };
 };
+
+const TYPE_WORDS = { product: "изделию", deal: "сделке", certificate: "сертификату" };
 
 window.addTask = async () => {
   await api("/api/tasks", {
