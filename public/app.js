@@ -635,4 +635,5 @@ window.addEventListener("hashchange", () => {
   render();
 });
 
+state.view = (location.hash.replace("#/", "") || state.view).split("?")[0];
 render();
