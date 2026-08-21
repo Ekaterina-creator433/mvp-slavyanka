@@ -84,6 +84,15 @@ app.get("/api/products/:id", (req, res) => {
   res.json(p);
 });
 
+// Автопривязка сертификатов по типу изделия: ключевые слова в названии/номере
+const CERT_MATCH = {
+  fire: ["огнестойк"],
+  antistat: ["антистат"],
+  oil: ["019/2011", "нефт"],
+  tick: ["энцефалит"],
+  signal: [],
+};
+
 app.post("/api/products", (req, res) => {
   const r = req.body;
   const p = db
@@ -101,7 +110,22 @@ app.post("/api/products", (req, res) => {
       r.tu || null,
       r.description || null
     );
-  res.json({ ok: true, id: p.lastInsertRowid });
+  let linked = [];
+  if (r.preset && CERT_MATCH[r.preset]) {
+    const cands = db
+      .prepare("SELECT * FROM certificates")
+      .all()
+      .filter((c) => daysUntil(c.expiry_date) > 0)
+      .filter((c) =>
+        CERT_MATCH[r.preset].some((k) => `${c.name} ${c.number}`.toLowerCase().includes(k))
+      );
+    const ins = db.prepare("INSERT INTO product_certificates (product_id, certificate_id) VALUES (?,?)");
+    for (const c of cands) {
+      ins.run(p.lastInsertRowid, c.id);
+      linked.push(c.number);
+    }
+  }
+  res.json({ ok: true, id: p.lastInsertRowid, linked });
 });
 
 app.put("/api/products/:id", (req, res) => {

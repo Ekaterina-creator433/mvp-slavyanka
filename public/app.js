@@ -103,12 +103,14 @@ views.dashboard = async () => {
 };
 
 views.products = async () => {
-  const [products, materials, mp] = await Promise.all([
+  const [products, materials, mp, certs] = await Promise.all([
     api("/api/products"),
     api("/api/materials"),
     api("/api/minpromtorg"),
+    api("/api/certificates"),
   ]);
   state._products = products;
+  state._certs = certs;
   const matOpts = materials.map((m) => `<option value="${esc(m.name)}">`).join("");
   const mpByProduct = {};
   mp.forEach((m) => {
@@ -148,6 +150,7 @@ views.products = async () => {
         <div class="field"><label>ТУ</label><input id="pTu"></div>
       </div>
       <div class="field" style="margin-top:12px"><label>Описание</label><textarea id="pDesc" rows="2"></textarea></div>
+      <div id="pCertHint" class="empty" style="display:none"></div>
       <div class="form-actions"><button class="btn btn--primary" onclick="addProduct()">Сохранить</button></div>
     </div>
 
@@ -170,16 +173,28 @@ views.products = async () => {
 };
 
 const PRODUCT_PRESETS = {
-  fire: { code: "SV", cls: "Класс 1 (защита от тепла и огня)", tnved: "6203.22.8000", okpd2: "14.12.30.150", material: "Термостойкая ткань Т-2" },
-  antistat: { code: "EL", cls: "Антистатика (защита от стат. электричества)", tnved: "6203.43.9000", okpd2: "14.12.30.160", material: "Смесовая ткань с антистатической нитью" },
-  oil: { code: "NP", cls: "Защита от нефти и нефтепродуктов", tnved: "6210.40.0000", okpd2: "14.12.30.170", material: "ПВХ-ткань маслостойкая" },
-  tick: { code: "TG", cls: "Защита от клещей и механических повреждений", tnved: "6203.49.9000", okpd2: "14.12.30.140", material: "Хлопковая ткань «Грета»" },
-  signal: { code: "UN", cls: "Сигнальная защита, видимость", tnved: "6203.42.9000", okpd2: "14.12.30.190", material: "Смесовая ткань с флюоресцентными полосами" },
+  fire: { code: "SV", cls: "Класс 1 (защита от тепла и огня)", tnved: "6203.22.8000", okpd2: "14.12.30.150", material: "Термостойкая ткань Т-2", certs: ["огнестойк"] },
+  antistat: { code: "EL", cls: "Антистатика (защита от стат. электричества)", tnved: "6203.43.9000", okpd2: "14.12.30.160", material: "Смесовая ткань с антистатической нитью", certs: ["антистат"] },
+  oil: { code: "NP", cls: "Защита от нефти и нефтепродуктов", tnved: "6210.40.0000", okpd2: "14.12.30.170", material: "ПВХ-ткань маслостойкая", certs: ["019/2011", "нефт"] },
+  tick: { code: "TG", cls: "Защита от клещей и механических повреждений", tnved: "6203.49.9000", okpd2: "14.12.30.140", material: "Хлопковая ткань «Грета»", certs: ["энцефалит"] },
+  signal: { code: "UN", cls: "Сигнальная защита, видимость", tnved: "6203.42.9000", okpd2: "14.12.30.190", material: "Смесовая ткань с флюоресцентными полосами", certs: [] },
+};
+
+const matchingCerts = (presetKey) => {
+  const pr = PRODUCT_PRESETS[presetKey];
+  if (!pr || !pr.certs.length) return [];
+  return (state._certs || [])
+    .filter((c) => c.days_left > 0)
+    .filter((c) => pr.certs.some((k) => `${c.name} ${c.number}`.toLowerCase().includes(k)));
 };
 
 window.presetChanged = () => {
-  const pr = PRODUCT_PRESETS[$("#pPreset").value];
-  if (!pr) return;
+  const key = $("#pPreset").value;
+  const pr = PRODUCT_PRESETS[key];
+  if (!pr) {
+    $("#pCertHint").style.display = "none";
+    return;
+  }
   $("#pClass").value = pr.cls;
   $("#pTnved").value = pr.tnved;
   $("#pOkpd2").value = pr.okpd2;
@@ -187,6 +202,12 @@ window.presetChanged = () => {
   const n = (state._products?.length || 0) + 1;
   $("#pCode").value = `${pr.code}-0${n}`;
   $("#pTu").value = `ТУ 8572-0${String(n).padStart(2, "0")}-22345678-2026`;
+  const hint = $("#pCertHint");
+  hint.style.display = "";
+  const mc = matchingCerts(key);
+  hint.innerHTML = mc.length
+    ? `✓ Сертификаты подтянутся автоматически: ${mc.map((c) => `<b>${esc(c.number)}</b> — ${esc(c.name)} (до ${esc(c.expiry_date)})`).join("; ")}`
+    : "Действующих сертификатов под этот тип в реестре нет — привяжите позже в разделе «Сертификаты».";
 };
 
 window.openProduct = async (id) => {
@@ -246,10 +267,15 @@ window.addProduct = async () => {
     okpd2: $("#pOkpd2").value,
     tu: $("#pTu").value,
     description: $("#pDesc").value,
+    preset: $("#pPreset").value || null,
   };
   try {
-    await api("/api/products", { method: "POST", body });
-    toast("Изделие добавлено");
+    const r = await api("/api/products", { method: "POST", body });
+    toast(
+      r.linked?.length
+        ? `Изделие добавлено. Сертификаты подтянуты: ${r.linked.join(", ")}`
+        : "Изделие добавлено"
+    );
     render();
   } catch (e) {
     toast("Ошибка: " + e.message);
