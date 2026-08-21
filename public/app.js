@@ -244,6 +244,13 @@ views.minpromtorg = async () => {
       : s === "pending"
         ? `<span class="tag tag--pending">на рассмотрении</span>`
         : `<span class="tag tag--expired">исключена</span>`;
+  const MP_WARN_DAYS = 240; // контроль за 8 месяцев
+  const ctrlTag = (m) => {
+    if (m.days_left == null) return `<span class="tag tag--new">не задан</span>`;
+    if (m.days_left < 0) return `<span class="tag tag--expired">истёк ${-m.days_left} дн.</span>`;
+    if (m.days_left <= MP_WARN_DAYS) return `<span class="tag tag--pending">контроль: ${m.days_left} дн.</span>`;
+    return `<span class="tag tag--valid">${m.days_left} дн.</span>`;
+  };
   return `
     <div class="card">
       <div class="section-title"><span>Добавить реестровую запись Минпромторга</span></div>
@@ -251,6 +258,7 @@ views.minpromtorg = async () => {
         <div class="field"><label>Изделие</label><select id="mpProduct">${opts}</select></div>
         <div class="field"><label>Номер записи</label><input id="mpNumber" placeholder="№ 2026/012345"></div>
         <div class="field"><label>Дата включения</label><input id="mpDate" type="date"></div>
+        <div class="field"><label>Действует до</label><input id="mpExpiry" type="date"></div>
         <div class="field"><label>Статус</label>
           <select id="mpStatus">
             <option value="active">В реестре</option>
@@ -265,11 +273,11 @@ views.minpromtorg = async () => {
 
     ${card(
       `Реестр российской промышленной продукции (Минпромторг РФ)`,
-      `<table><tr><th>№ записи</th><th>Изделие</th><th>Дата включения</th><th>Статус</th><th>Примечание</th><th></th></tr>
+      `<table><tr><th>№ записи</th><th>Изделие</th><th>Дата включения</th><th>Действует до</th><th>Контроль срока</th><th>Статус</th><th>Примечание</th><th></th></tr>
        ${records
          .map(
            (m) => `<tr><td><b>${esc(m.registry_number)}</b></td><td>${esc(m.product_code)} · ${esc(m.product_name)}</td>
-           <td>${esc(m.included_date)}</td><td>${statusTag(m.status)}</td><td>${esc(m.note || "")}</td>
+           <td>${esc(m.included_date)}</td><td>${esc(m.expiry_date || "—")}</td><td>${ctrlTag(m)}</td><td>${statusTag(m.status)}</td><td>${esc(m.note || "")}</td>
            <td><button class="btn btn--ghost" onclick="delMinpromtorg(${m.id})">Удалить</button></td></tr>`
          )
          .join("")}
@@ -286,6 +294,7 @@ window.addMinpromtorg = async () => {
         product_id: Number($("#mpProduct").value),
         registry_number: $("#mpNumber").value,
         included_date: $("#mpDate").value,
+        expiry_date: $("#mpExpiry").value || null,
         status: $("#mpStatus").value,
         note: $("#mpNote").value,
       },

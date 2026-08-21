@@ -166,6 +166,8 @@ app.get("/api/certificates/expiring", (req, res) => {
 });
 
 // =============================== РЕЕСТР МИНПРОМТОРГА ===============================
+const MP_WARN_DAYS = 240; // контроль за 8 месяцев до окончания
+
 app.get("/api/minpromtorg", (req, res) => {
   const rows = db
     .prepare(
@@ -175,6 +177,9 @@ app.get("/api/minpromtorg", (req, res) => {
        ORDER BY m.included_date DESC`
     )
     .all();
+  rows.forEach((m) => {
+    m.days_left = m.expiry_date ? daysUntil(m.expiry_date) : null;
+  });
   res.json(rows);
 });
 
@@ -185,13 +190,20 @@ app.post("/api/minpromtorg", (req, res) => {
   }
   try {
     const rec = db
-      .prepare("INSERT INTO minpromtorg_records (product_id, registry_number, included_date, status, note) VALUES (?,?,?,?,?)")
-      .run(r.product_id, r.registry_number, r.included_date, r.status || "active", r.note || null);
+      .prepare("INSERT INTO minpromtorg_records (product_id, registry_number, included_date, status, note, expiry_date) VALUES (?,?,?,?,?,?)")
+      .run(r.product_id, r.registry_number, r.included_date, r.status || "active", r.note || null, r.expiry_date || null);
     notify(`Добавлена реестровая запись Минпромторга ${r.registry_number}`);
     res.json({ ok: true, id: rec.lastInsertRowid });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
+});
+
+app.put("/api/minpromtorg/:id", (req, res) => {
+  const r = req.body;
+  db.prepare("UPDATE minpromtorg_records SET expiry_date=?, status=COALESCE(?, status), note=COALESCE(?, note) WHERE id=?")
+    .run(r.expiry_date || null, r.status || null, r.note || null, req.params.id);
+  res.json({ ok: true });
 });
 
 app.delete("/api/minpromtorg/:id", (req, res) => {

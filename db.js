@@ -124,9 +124,17 @@ CREATE TABLE IF NOT EXISTS minpromtorg_records (
   registry_number TEXT NOT NULL UNIQUE,
   included_date TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active',
-  note TEXT
+  note TEXT,
+  expiry_date TEXT
 );
 `);
+
+// Миграция для существующих баз: колонка контроля срока действия записи
+try {
+  db.exec("ALTER TABLE minpromtorg_records ADD COLUMN expiry_date TEXT");
+} catch (e) {
+  /* колонка уже есть */
+}
 
 const count = db.prepare("SELECT COUNT(*) AS c FROM products").get().c;
 if (count === 0) {
@@ -147,6 +155,26 @@ if (regCount === 0) {
     [5, "№ 2026/012500", "2026-05-22", "pending", "Документы направлены, ожидается включение в реестр"],
   ];
   for (const r of records) regIns.run(...r);
+}
+
+// Демо-сроки действия для записей, у которых они ещё не заданы
+{
+  const total = db.prepare("SELECT COUNT(*) AS c FROM minpromtorg_records").get().c;
+  const nulls = db.prepare("SELECT COUNT(*) AS c FROM minpromtorg_records WHERE expiry_date IS NULL").get().c;
+  if (total > 0 && nulls === total) {
+    const today = new Date();
+    const fmt = (d) => d.toISOString().slice(0, 10);
+    const addDays = (n) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() + n);
+      return fmt(d);
+    };
+    const upd = db.prepare("UPDATE minpromtorg_records SET expiry_date=? WHERE id=?");
+    // разные сценарии: в пределах 8 месяцев, за пределами, просроченная
+    const offsets = [200, 420, 120, -25, 520];
+    const rows = db.prepare("SELECT id FROM minpromtorg_records ORDER BY id").all();
+    rows.forEach((row, i) => upd.run(addDays(offsets[i % offsets.length]), row.id));
+  }
 }
 
 function seed() {
