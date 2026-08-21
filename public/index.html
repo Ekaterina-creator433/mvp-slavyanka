@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Славянка Текстиль · MVP-платформа</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand__logo">СТ</div>
+        <div>
+          <div class="brand__name">Славянка Текстиль</div>
+          <div class="brand__sub">MVP-платформа</div>
+        </div>
+      </div>
+      <div class="role-switch">
+        <label for="role">Моя роль</label>
+        <select id="role">
+          <option value="manager">Менеджер по продажам</option>
+          <option value="technologist">Технолог</option>
+          <option value="otk">ОТК</option>
+          <option value="supplier">Снабженец</option>
+        </select>
+      </div>
+      <nav class="nav" id="nav">
+        <a href="#/dashboard" data-view="dashboard">Дашборд</a>
+        <a href="#/products" data-view="products">Номенклатура</a>
+        <a href="#/certificates" data-view="certificates">Сертификаты</a>
+        <a href="#/deals" data-view="deals">Сделки</a>
+        <a href="#/quality" data-view="quality">ОТК · Качество</a>
+        <a href="#/materials" data-view="materials">Материалы</a>
+        <a href="#/tasks" data-view="tasks">Задачи</a>
+        <a href="#/contractors" data-view="contractors">Контрагенты</a>
+        <a href="#/importexport" data-view="importexport">Импорт / Экспорт</a>
+        <a href="#/reports" data-view="reports">Отчёты</a>
+      </nav>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <h1 id="pageTitle">Дашборд</h1>
+        <span id="roleBadge" class="badge"></span>
+      </header>
+      <section id="content" class="content"></section>
+    </main>
+  </div>
+  <div id="toast" class="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
