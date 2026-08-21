@@ -147,6 +147,28 @@ window.openProduct = async (id) => {
   const mats = p.materials.length
     ? p.materials.map((m) => `<li>${esc(m.name)} — ${m.consumption} ${esc(m.unit)}/шт</li>`).join("")
     : "<li>не заданы</li>";
+  const mpTag = (s) =>
+    s === "active"
+      ? `<span class="tag tag--valid">в реестре</span>`
+      : s === "pending"
+        ? `<span class="tag tag--pending">на рассмотрении</span>`
+        : `<span class="tag tag--expired">исключена</span>`;
+  const mpCtrl = (m) => {
+    if (m.days_left == null) return `<span class="tag tag--new">не задан</span>`;
+    if (m.days_left < 0) return `<span class="tag tag--expired">истёк ${-m.days_left} дн.</span>`;
+    if (m.days_left <= 240) return `<span class="tag tag--pending">контроль: ${m.days_left} дн.</span>`;
+    return `<span class="tag tag--valid">${m.days_left} дн.</span>`;
+  };
+  const mp = p.minpromtorg.length
+    ? `<table><tr><th>№ записи</th><th>Включена</th><th>Действует до</th><th>Контроль</th><th>Статус</th></tr>
+       ${p.minpromtorg
+         .map(
+           (m) => `<tr><td>${esc(m.registry_number)}</td><td>${esc(m.included_date)}</td>
+           <td>${esc(m.expiry_date || "—")}</td><td>${mpCtrl(m)}</td><td>${mpTag(m.status)}</td></tr>`
+         )
+         .join("")}
+       </table>`
+    : "<div class='empty'>Реестровых записей нет</div>";
   $("#content").innerHTML = `
     <div class="card">
       <div class="section-title"><span>Карточка: ${esc(p.name)}</span>
@@ -159,6 +181,7 @@ window.openProduct = async (id) => {
       </table>
       <div style="margin-top:12px"><b>Сертификаты:</b><ul>${certs}</ul></div>
       <div style="margin-top:12px"><b>Нормы расхода материалов:</b><ul>${mats}</ul></div>
+      <div style="margin-top:12px"><b>Реестровые записи Минпромторга:</b>${mp}</div>
     </div>`;
 };
 
@@ -528,7 +551,13 @@ window.addMaterial = async () => {
 };
 
 views.tasks = async () => {
-  const tasks = await api("/api/tasks");
+  const [tasks, products, deals, certs] = await Promise.all([
+    api("/api/tasks"),
+    api("/api/products"),
+    api("/api/deals"),
+    api("/api/certificates"),
+  ]);
+  state._taskRefs = { product: products, deal: deals, certificate: certs };
   return `
     <div class="card">
       <div class="section-title"><span>Новая задача</span></div>
@@ -540,10 +569,10 @@ views.tasks = async () => {
           <option value="supplier">Снабженец</option>
         </select></div>
         <div class="field"><label>Название</label><input id="tTitle"></div>
-        <div class="field"><label>Связано с</label><select id="tType">
-          <option value="">—</option><option value="deal">сделка</option><option value="product">изделие</option><option value="certificate">сертификат</option>
+        <div class="field"><label>Связано с</label><select id="tType" onchange="taskTypeChanged()">
+          <option value="">—</option><option value="product">изделие</option><option value="deal">сделка</option><option value="certificate">сертификат</option>
         </select></div>
-        <div class="field"><label>ID связи</label><input id="tRelatedId" type="number"></div>
+        <div class="field"><label>Объект</label><select id="tRef" disabled><option value="">сначала выберите тип</option></select></div>
         <div class="field"><label>Срок</label><input id="tDue" type="date"></div>
       </div>
       <div class="form-actions"><button class="btn btn--primary" onclick="addTask()">Создать задачу</button></div>
@@ -552,16 +581,44 @@ views.tasks = async () => {
       `Задачи`,
       `<table><tr><th>Роль</th><th>Задача</th><th>Связь</th><th>Срок</th><th>Статус</th><th></th></tr>
        ${tasks
-         .map(
-           (t) => `<tr><td><span class="tag tag--new">${esc(ROLE_NAMES[t.role] || t.role)}</span></td>
-           <td>${esc(t.title)}</td><td>${esc(t.related_type || "—")} ${t.related_id ? "#" + t.related_id : ""}</td>
+         .map((t) => {
+           const ref = state._taskRefs[t.related_type]?.find((x) => x.id === t.related_id);
+           let link = `${esc(t.related_type || "—")} ${t.related_id ? "#" + t.related_id : ""}`;
+           if (ref) {
+             const label = t.related_type === "product" ? ref.name : t.related_type === "deal" ? ref.number : ref.number;
+             if (t.related_type === "product") link = `<a href="javascript:void(0)" onclick="openProduct(${t.related_id})">${esc(label)}</a>`;
+             else if (t.related_type === "deal") link = `<a href="javascript:void(0)" onclick="openDeal(${t.related_id})">${esc(label)}</a>`;
+             else link = esc(label);
+           }
+           return `<tr><td><span class="tag tag--new">${esc(ROLE_NAMES[t.role] || t.role)}</span></td>
+           <td>${esc(t.title)}</td><td>${link}</td>
            <td>${esc(t.due_date || "—")}</td>
            <td><span class="tag tag--${t.status}">${t.status === "open" ? "открыта" : "закрыта"}</span></td>
-           <td>${t.status === "open" ? `<button class="btn btn--ghost btn--sm" onclick="closeTask(${t.id})">закрыть</button>` : ""}</td></tr>`
-         )
+           <td>${t.status === "open" ? `<button class="btn btn--ghost btn--sm" onclick="closeTask(${t.id})">закрыть</button>` : ""}</td></tr>`;
+         })
          .join("")}
        </table>`
     )}`;
+};
+
+window.taskTypeChanged = () => {
+  const type = $("#tType").value;
+  const sel = $("#tRef");
+  if (!type) {
+    sel.innerHTML = `<option value="">сначала выберите тип</option>`;
+    sel.disabled = true;
+    return;
+  }
+  const items = state._taskRefs[type] || [];
+  sel.disabled = false;
+  sel.innerHTML =
+    `<option value="">— выберите —</option>` +
+    items
+      .map((x) => {
+        const label = type === "product" ? `${x.code} · ${x.name}` : x.number || x.id;
+        return `<option value="${x.id}">${esc(String(label))}</option>`;
+      })
+      .join("");
 };
 
 window.addTask = async () => {
@@ -571,7 +628,7 @@ window.addTask = async () => {
       role: $("#tRole").value,
       title: $("#tTitle").value,
       related_type: $("#tType").value || null,
-      related_id: $("#tRelatedId").value ? Number($("#tRelatedId").value) : null,
+      related_id: $("#tRef").value ? Number($("#tRef").value) : null,
       due_date: $("#tDue").value || null,
     },
   });

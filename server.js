@@ -75,6 +75,12 @@ app.get("/api/products/:id", (req, res) => {
       "SELECT m.*, pm.consumption FROM materials m JOIN product_materials pm ON pm.material_id=m.id WHERE pm.product_id=?"
     )
     .all(p.id);
+  p.minpromtorg = db
+    .prepare("SELECT * FROM minpromtorg_records WHERE product_id=? ORDER BY included_date DESC")
+    .all(p.id);
+  p.minpromtorg.forEach((m) => {
+    m.days_left = m.expiry_date ? daysUntil(m.expiry_date) : null;
+  });
   res.json(p);
 });
 
