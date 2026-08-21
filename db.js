@@ -117,11 +117,36 @@ CREATE TABLE IF NOT EXISTS tasks (
   due_date TEXT,
   assignee TEXT
 );
+
+CREATE TABLE IF NOT EXISTS minpromtorg_records (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  registry_number TEXT NOT NULL UNIQUE,
+  included_date TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  note TEXT
+);
 `);
 
 const count = db.prepare("SELECT COUNT(*) AS c FROM products").get().c;
 if (count === 0) {
   seed();
+}
+
+// Реестровые записи Минпромторга: наполняем, если пусто (даже в существующей базе)
+const regCount = db.prepare("SELECT COUNT(*) AS c FROM minpromtorg_records").get().c;
+if (regCount === 0) {
+  const regIns = db.prepare(
+    "INSERT INTO minpromtorg_records (product_id, registry_number, included_date, status, note) VALUES (?,?,?,?,?)"
+  );
+  const records = [
+    [1, "№ 2026/011234", "2026-02-14", "active", "Заключение о подтверждении производства РФ, исх. № 472/2 от 03.06.2026"],
+    [2, "№ 2026/011235", "2026-02-14", "active", "Выписка из реестра российской промышленной продукции"],
+    [3, "№ 2025/009876", "2025-11-03", "active", "Костюмы с защитой от нефтепродуктов (тип А)"],
+    [4, "№ 2024/007654", "2024-08-19", "active", "Энцефалитные костюмы для лесной отрасли"],
+    [5, "№ 2026/012500", "2026-05-22", "pending", "Документы направлены, ожидается включение в реестр"],
+  ];
+  for (const r of records) regIns.run(...r);
 }
 
 function seed() {

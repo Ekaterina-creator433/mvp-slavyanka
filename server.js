@@ -165,6 +165,40 @@ app.get("/api/certificates/expiring", (req, res) => {
   res.json(soon);
 });
 
+// =============================== РЕЕСТР МИНПРОМТОРГА ===============================
+app.get("/api/minpromtorg", (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT m.*, p.name AS product_name, p.code AS product_code
+       FROM minpromtorg_records m
+       JOIN products p ON p.id = m.product_id
+       ORDER BY m.included_date DESC`
+    )
+    .all();
+  res.json(rows);
+});
+
+app.post("/api/minpromtorg", (req, res) => {
+  const r = req.body;
+  if (!r.product_id || !r.registry_number || !r.included_date) {
+    return res.status(400).json({ ok: false, error: "Заполните изделие, номер записи и дату включения" });
+  }
+  try {
+    const rec = db
+      .prepare("INSERT INTO minpromtorg_records (product_id, registry_number, included_date, status, note) VALUES (?,?,?,?,?)")
+      .run(r.product_id, r.registry_number, r.included_date, r.status || "active", r.note || null);
+    notify(`Добавлена реестровая запись Минпромторга ${r.registry_number}`);
+    res.json({ ok: true, id: rec.lastInsertRowid });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.delete("/api/minpromtorg/:id", (req, res) => {
+  db.prepare("DELETE FROM minpromtorg_records WHERE id=?").run(req.params.id);
+  res.json({ ok: true });
+});
+
 // =============================== КОНТРАГЕНТЫ ===============================
 app.get("/api/contractors", (req, res) => res.json(db.prepare("SELECT * FROM contractors ORDER BY id").all()));
 app.post("/api/contractors", (req, res) => {

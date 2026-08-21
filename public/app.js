@@ -235,6 +235,78 @@ window.addCertificate = async () => {
   }
 };
 
+views.minpromtorg = async () => {
+  const [records, products] = await Promise.all([api("/api/minpromtorg"), api("/api/products")]);
+  const opts = products.map((p) => `<option value="${p.id}">${esc(p.code)} · ${esc(p.name)}</option>`).join("");
+  const statusTag = (s) =>
+    s === "active"
+      ? `<span class="tag tag--valid">в реестре</span>`
+      : s === "pending"
+        ? `<span class="tag tag--pending">на рассмотрении</span>`
+        : `<span class="tag tag--expired">исключена</span>`;
+  return `
+    <div class="card">
+      <div class="section-title"><span>Добавить реестровую запись Минпромторга</span></div>
+      <div class="form-grid">
+        <div class="field"><label>Изделие</label><select id="mpProduct">${opts}</select></div>
+        <div class="field"><label>Номер записи</label><input id="mpNumber" placeholder="№ 2026/012345"></div>
+        <div class="field"><label>Дата включения</label><input id="mpDate" type="date"></div>
+        <div class="field"><label>Статус</label>
+          <select id="mpStatus">
+            <option value="active">В реестре</option>
+            <option value="pending">На рассмотрении</option>
+            <option value="excluded">Исключена</option>
+          </select>
+        </div>
+        <div class="field"><label>Примечание</label><input id="mpNote" placeholder="Выписка из реестра, заключение и т.д."></div>
+      </div>
+      <div class="form-actions"><button class="btn btn--primary" onclick="addMinpromtorg()">Сохранить</button></div>
+    </div>
+
+    ${card(
+      `Реестр российской промышленной продукции (Минпромторг РФ)`,
+      `<table><tr><th>№ записи</th><th>Изделие</th><th>Дата включения</th><th>Статус</th><th>Примечание</th><th></th></tr>
+       ${records
+         .map(
+           (m) => `<tr><td><b>${esc(m.registry_number)}</b></td><td>${esc(m.product_code)} · ${esc(m.product_name)}</td>
+           <td>${esc(m.included_date)}</td><td>${statusTag(m.status)}</td><td>${esc(m.note || "")}</td>
+           <td><button class="btn btn--ghost" onclick="delMinpromtorg(${m.id})">Удалить</button></td></tr>`
+         )
+         .join("")}
+       </table>`
+    )}
+  `;
+};
+
+window.addMinpromtorg = async () => {
+  try {
+    await api("/api/minpromtorg", {
+      method: "POST",
+      body: {
+        product_id: Number($("#mpProduct").value),
+        registry_number: $("#mpNumber").value,
+        included_date: $("#mpDate").value,
+        status: $("#mpStatus").value,
+        note: $("#mpNote").value,
+      },
+    });
+    toast("Запись добавлена");
+    render();
+  } catch (e) {
+    toast("Ошибка: " + e.message);
+  }
+};
+
+window.delMinpromtorg = async (id) => {
+  try {
+    await api(`/api/minpromtorg/${id}`, { method: "DELETE" });
+    toast("Запись удалена");
+    render();
+  } catch (e) {
+    toast("Ошибка: " + e.message);
+  }
+};
+
 views.deals = async () => {
   const [deals, products, contractors] = await Promise.all([
     api("/api/deals"),
