@@ -129,20 +129,30 @@ views.products = async () => {
     <div class="card">
       <div class="section-title"><span>Добавить изделие</span></div>
       <div class="form-grid">
-        <div class="field"><label>Тип изделия (автозаполнение)</label><select id="pPreset" onchange="presetChanged()">
-          <option value="">— выберите тип —</option>
+        <div class="field"><label>Тип изделия</label><select id="pType" onchange="productFormChanged()">
+          <option value="">— выберите —</option>
+          <option>Костюм</option>
+          <option>Костюм зимний</option>
+          <option>Костюм летний</option>
+          <option>Комбинезон</option>
+          <option>Полукомбинезон</option>
+          <option>Куртка утеплённая</option>
+          <option>Брюки</option>
+          <option>Жилет</option>
+        </select></div>
+        <div class="field"><label>Защитные свойства (автозаполнение)</label><select id="pPreset" onchange="productFormChanged()">
+          <option value="">— выберите —</option>
           <option value="fire">Защита от тепла и огня (сварщик)</option>
           <option value="antistat">Антистатика</option>
           <option value="oil">Защита от нефти и нефтепродуктов</option>
           <option value="tick">Защита от клещей (энцефалитный)</option>
           <option value="signal">Сигнальная защита (видимость)</option>
         </select></div>
-        <div class="field"><label>Название</label><input id="pName" required></div>
+        <div class="field"><label>Название (формируется из типа и свойств)</label><input id="pName" required></div>
         <div class="field"><label>Артикул (код)</label><input id="pCode"></div>
         <div class="field"><label>Класс защиты</label><input id="pClass"></div>
-        <div class="field"><label>Климатический пояс</label><select id="pZone">
+        <div class="field"><label>Климатический пояс (по ГОСТ)</label><select id="pZone">
           <option value="">—</option>
-          <option>I–II</option><option>I–III</option><option>I–IV</option><option>I–V</option><option>IV особый</option>
         </select></div>
         <div class="field"><label>Материал</label><input id="pMaterial" list="matList"><datalist id="matList">${matOpts}</datalist></div>
         <div class="field"><label>ТН ВЭД</label><input id="pTnved"></div>
@@ -150,6 +160,7 @@ views.products = async () => {
         <div class="field"><label>ТУ</label><input id="pTu"></div>
       </div>
       <div class="field" style="margin-top:12px"><label>Описание</label><textarea id="pDesc" rows="2"></textarea></div>
+      <div id="pGostHint" class="empty" style="display:none"></div>
       <div id="pCertHint" class="empty" style="display:none"></div>
       <div class="form-actions"><button class="btn btn--primary" onclick="addProduct()">Сохранить</button></div>
     </div>
@@ -173,11 +184,34 @@ views.products = async () => {
 };
 
 const PRODUCT_PRESETS = {
-  fire: { code: "SV", cls: "Класс 1 (защита от тепла и огня)", tnved: "6203.22.8000", okpd2: "14.12.30.150", material: "Термостойкая ткань Т-2", certs: ["огнестойк"] },
-  antistat: { code: "EL", cls: "Антистатика (защита от стат. электричества)", tnved: "6203.43.9000", okpd2: "14.12.30.160", material: "Смесовая ткань с антистатической нитью", certs: ["антистат"] },
-  oil: { code: "NP", cls: "Защита от нефти и нефтепродуктов", tnved: "6210.40.0000", okpd2: "14.12.30.170", material: "ПВХ-ткань маслостойкая", certs: ["019/2011", "нефт"] },
-  tick: { code: "TG", cls: "Защита от клещей и механических повреждений", tnved: "6203.49.9000", okpd2: "14.12.30.140", material: "Хлопковая ткань «Грета»", certs: ["энцефалит"] },
-  signal: { code: "UN", cls: "Сигнальная защита, видимость", tnved: "6203.42.9000", okpd2: "14.12.30.190", material: "Смесовая ткань с флюоресцентными полосами", certs: [] },
+  fire: { code: "SV", cls: "Класс 1 (защита от тепла и огня)", tnved: "6203.22.8000", okpd2: "14.12.30.150", material: "Термостойкая ткань Т-2", certs: ["огнестойк"], namePart: "для защиты от искр и брызг расплавленного металла (сварщик)", gost: "ГОСТ 12.4.250-2013, ТР ТС 019/2011" },
+  antistat: { code: "EL", cls: "Антистатика (защита от стат. электричества)", tnved: "6203.43.9000", okpd2: "14.12.30.160", material: "Смесовая ткань с антистатической нитью", certs: ["антистат"], namePart: "антистатический", gost: "ГОСТ 12.4.124-83, ТР ТС 019/2011" },
+  oil: { code: "NP", cls: "Защита от нефти и нефтепродуктов", tnved: "6210.40.0000", okpd2: "14.12.30.170", material: "ПВХ-ткань маслостойкая", certs: ["019/2011", "нефт"], namePart: "для защиты от нефти и нефтепродуктов", gost: "ТР ТС 019/2011 (маркировка Нф)" },
+  tick: { code: "TG", cls: "Защита от клещей и механических повреждений", tnved: "6203.49.9000", okpd2: "14.12.30.140", material: "Хлопковая ткань «Грета»", certs: ["энцефалит"], namePart: "энцефалитный (защита от клещей)", gost: "ТР ТС 019/2011" },
+  signal: { code: "UN", cls: "Сигнальная защита, видимость", tnved: "6203.42.9000", okpd2: "14.12.30.190", material: "Смесовая ткань с флюоресцентными полосами", certs: [], namePart: "сигнальный повышенной видимости", gost: "ГОСТ 12.4.281-2014, ТР ТС 019/2011" },
+};
+
+const CLIMATE_ZONES = {
+  I: "до -25 °C",
+  II: "до -35 °C",
+  III: "до -45 °C",
+  IV: "до -55 °C",
+  Особый: "до -65 °C",
+};
+
+const updateZoneOptions = (type) => {
+  const sel = $("#pZone");
+  const winter = /зимн|утепл/i.test(type);
+  const summer = /летн/i.test(type);
+  let keys = Object.keys(CLIMATE_ZONES);
+  if (summer) keys = ["I", "II"];
+  const prev = sel.value;
+  sel.innerHTML =
+    `<option value="">—</option>` +
+    keys.map((k) => `<option value="${k}">Пояс ${k} (${CLIMATE_ZONES[k]})</option>`).join("");
+  if (winter && keys.includes("IV")) sel.value = "IV";
+  else if (summer && keys.includes("I")) sel.value = "I";
+  else if (keys.includes(prev)) sel.value = prev;
 };
 
 const matchingCerts = (presetKey) => {
@@ -188,13 +222,18 @@ const matchingCerts = (presetKey) => {
     .filter((c) => pr.certs.some((k) => `${c.name} ${c.number}`.toLowerCase().includes(k)));
 };
 
-window.presetChanged = () => {
+window.productFormChanged = () => {
   const key = $("#pPreset").value;
-  const pr = PRODUCT_PRESETS[key];
-  if (!pr) {
-    $("#pCertHint").style.display = "none";
+  const type = $("#pType").value;
+  updateZoneOptions(type);
+  const gostHint = $("#pGostHint");
+  if (!key || !type) {
+    gostHint.style.display = "none";
+    if (!key) $("#pCertHint").style.display = "none";
     return;
   }
+  const pr = PRODUCT_PRESETS[key];
+  $("#pName").value = `${type} ${pr.namePart}`;
   $("#pClass").value = pr.cls;
   $("#pTnved").value = pr.tnved;
   $("#pOkpd2").value = pr.okpd2;
@@ -202,6 +241,8 @@ window.presetChanged = () => {
   const n = (state._products?.length || 0) + 1;
   $("#pCode").value = `${pr.code}-0${n}`;
   $("#pTu").value = `ТУ 8572-0${String(n).padStart(2, "0")}-22345678-2026`;
+  gostHint.style.display = "";
+  gostHint.innerHTML = `<b>Нормативная база:</b> ${esc(pr.gost)} · климатические пояса — ГОСТ 12.4.303-2016`;
   const hint = $("#pCertHint");
   hint.style.display = "";
   const mc = matchingCerts(key);
