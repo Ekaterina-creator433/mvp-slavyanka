@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log*
+.env
+*.log
+*.pid
+data/*.db
+data/*.db-*
+Dockerfile
+.dockerignore
+.git
+docs
+server-err.log
+server-out.log
