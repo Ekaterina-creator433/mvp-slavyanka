@@ -523,6 +523,10 @@ app.get("/api/reports/certificates", (req, res) => {
   res.json(counts);
 });
 
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true, service: "mvp-slavyanka", uptime: Math.round(process.uptime()), time: nowLocal() });
+});
+
 // предупреждения при старте
 setTimeout(() => {
   const expiring = db.prepare("SELECT number, expiry_date FROM certificates").all().filter((c) => daysUntil(c.expiry_date) <= 30);
