@@ -1,6 +1,6 @@
 {
   "name": "mvp-slavyanka",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "MVP SaaS-платформа ООО «Славянка Текстиль»: номенклатура, сертификация, сделки",
   "main": "server.js",
   "scripts": {
